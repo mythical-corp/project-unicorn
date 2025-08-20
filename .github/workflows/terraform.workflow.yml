@@ -15,7 +15,7 @@ jobs:
   run-per-tenant:
     strategy:
       matrix:
-        env: [tenant-a, tenant-b] # GitHub Environments
+        env: [tenant-A tenant-B] # GitHub Environments
     runs-on: ubuntu-latest
     environment: ${{ matrix.env }}
 
@@ -27,7 +27,6 @@ jobs:
       CENTRAL_STORAGE_ACCOUNT: ${{ secrets.TF_BACKEND_STORAGE_ACCOUNT }}  # Central Storage Account name used for flow logs & terraform backend state management.
       CENTRAL_STORAGE_ID: ${{ secrets.TF_BACKEND_STORAGE_ID }} # Full Azure Resource ID of the central Storage Account.
       CENTRAL_TF_BACKEND_CONTAINER: ${{ secrets.TF_BACKEND_CONTAINER }} # Name of the container storing the terraform state files.
-      CENTRAL_TF_BACKEND_FILE_PREFIX: unicorn # Terraform state file prefix.
       ROOT_MANAGEMENT_GROUP_ID: ${{ secrets.ROOT_MG_ID }} # The Management Group ID used as policy assignment scope. 
 
     steps:
@@ -75,18 +74,13 @@ jobs:
             echo "=== Processing subscription: $SUB ==="
             az account set --subscription "$SUB"
 
-            export ARM_SUBSCRIPTION_ID_CURRENT="$SUB"
-
-            # Export TF variables for this run
-            export TF_VAR_tenant_id="$ARM_TENANT_ID"
-            export TF_VAR_subscription_id="$ARM_SUBSCRIPTION_ID_CURRENT"
             export TF_VAR_management_group_id="$ROOT_MANAGEMENT_GROUP_ID"
 
             terraform init \
               -backend-config="storage_account_name=${{ env.CENTRAL_STORAGE_ACCOUNT }}"
               -backend-config="container_name=${{ env.CENTRAL_TF_BACKEND_CONTAINER }}"
               -backend-config="resource_group_name=${{ env.CENTRAL_STORAGE_RG }}"
-              -backend-config="key=${{ env.CENTRAL_TF_BACKEND_FILE_PREFIX }}-${var.subscription_id}"
+              -backend-config="key=${{ env.ARM_TENANT_ID }}-${{ env.ARM_SUBSCRIPTION_ID }}.tfstate"
 
       
       - name: Enable Flow Logs
@@ -122,7 +116,6 @@ jobs:
                 --locations "$vnet_loc" \
                 --resource-group "NetworkWatcherRG" \
                 --enabled true || true
-
               
               # Create or update Vnet flow log
               az network watcher flow-log create \
@@ -159,7 +152,7 @@ jobs:
               nsg_rg=$(echo "$nsg" | jq -r '.resourceGroup')
               nsg_loc=$(echo "$nsg" | jq -r '.location')
 
-              echo "---> enabling flow logs for Vnet: $vnet_name (RG: $vnet_rg, Location: $vnet_loc)"
+              echo "---> enabling flow logs for NSG: $nsg_name(RG: $nsg_rg, Location: $nsg_loc)"
 
               # Disable legacy NSG flow logs
               az network watcher flow-log create \
