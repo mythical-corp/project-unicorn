@@ -1,0 +1,180 @@
+{
+    "properties": {
+        "displayName": "Diagnostic Settings for Virtual Networks",
+        "mode": "All",
+        "description": "Export Virtual Network diagnostic settings to Storage Account.",
+        "metadata": {
+            "category": "Monitoring"
+        },
+        "parameters": {
+            "effect": {
+                "type": "String",
+                "defaultValue": "DeployIfNotExists",
+                "allowedValues": [
+                    "AuditIfNotExists",
+                    "DeployIfNotExists",
+                    "Disabled"
+                ],
+                "metadata": {
+                    "displayName": "Effect",
+                    "description": "Enable or disable the execution of the policy."
+                }
+            },
+            "profileName": {
+                "type": "String",
+                "defaultValue": "diags-sett-vnet",
+                "metadata": {
+                    "displayName": "Profile name for config.",
+                    "description": "The profile name for the Azure Policy"
+                }
+            },
+            "storageAccountId": {
+                "type": "String",
+                "metadata": {
+                    "displayName": "central Storage Account.",
+                    "description": "The Resource ID of the central Storage Account.",
+                    "assignPermissions": true
+                }
+            },
+            "azureRegions": {
+                "type": "String",
+                "metadata": {
+                    "displayName": "Allowed locations.",
+                    "description": "The list of locations that can be specified when deploying resources.",
+                    "strongType": "location"
+                }
+            },
+            "metricsEnabled": {
+                "type": "String",
+                "metadata": {
+                    "displayName": "Enable metrics.",
+                    "description": "Enable metrics - True or False."
+                },
+                "allowedValues": [
+                    "True",
+                    "False"
+                ],
+                "defaultValue": "False"
+            },
+            "logsEnabled": {
+                "type": "String",
+                "metadata": {
+                    "displayName": "Enable logs.",
+                    "description": "Enable logs - True or False."
+                },
+                "allowedValues": [
+                    "True",
+                    "False"
+                ],
+                "defaultValue": "True"
+            }
+        },
+        "policyRule": {
+            "if": {
+                "allOf": [
+                    {
+                        "field": "type",
+                        "equals": "Microsoft.Network/virtualNetworks"
+                    },
+                    {
+                        "field": "location",
+                        "equals": "[parameters('azureRegions)]"
+                    }
+                ]
+            },
+            "then": {
+                "effect": "[parameters('effect')]",
+                "details": {
+                    "type": "Microsoft.Insights/diagnosticSettings",
+                    "name": "[parameters('profileName')]",
+                    "existenceCondition": {
+                        "allOf": [
+                            {
+                                "field": "Microsoft.Insights/diagnosticSettings/logs.enabled",
+                                "equals": "[parameters('logsEnabled')]"
+                            },
+                            {
+                                "field": "Microsoft.Insights/diagnosticSettings/metrics.enabled",
+                                "equals": "[parameters('metricsEnabled')]"
+                            }
+                        ]
+                    },
+                    "roleDefinitionIds": [
+                        "/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c"
+                    ],
+                    "deployment": {
+                        "properties": {
+                            "mode": "incremental",
+                            "template": {
+                                "$schema:": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                                "contentVersion": "1.0.0.0",
+                                "parameters": {
+                                    "name": {
+                                        "type": "String"
+                                    },
+                                    "storageAccountId": {
+                                        "type": "String"
+                                    },
+                                    "metricsEnabled": {
+                                        "type": "String"
+                                    },
+                                    "logsEnabled": {
+                                        "type": "String"
+                                    },
+                                    "profileName": {
+                                        "type": "String"
+                                    }
+                                },
+                                "variables": {},
+                                "resources": [
+                                    {
+                                        "type": "Microsoft.Network/virtualNetworks/providers/diagnosticSettings",
+                                        "apiVersion": "2017-05-01-preview",
+                                        "name": "[concat(parameters('name'), '/', 'Microsoft.Insights/', parameters('profileName'))]",
+                                        "location": "northeurope",
+                                        "properties": {
+                                            "storageAccountId": "[parameters('storageAccountId')]",
+                                            "metrics": [
+                                                {
+                                                    "category": "AllMetrics",
+                                                    "enabled": "[parameters('metricsEnabled')]",
+                                                    "retentionPolicy": {
+                                                        "enabled": false,
+                                                        "days": 0
+                                                    }
+                                                }
+                                            ],
+                                            "logs": [
+                                                {
+                                                    "category": "VMProtectionAlerts",
+                                                    "enabled": "[parameters('logsEnabled')]"
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "parameters": {
+                                "name": {
+                                    "value": "[field('name')]"
+                                },
+                                "storageAccountId": {
+                                    "value": "[parameters('storageAccountId')]"
+                                },
+                                "metricsEnabled": {
+                                    "value": "[parameters('metricsEnabled')]"
+                                },
+                                "logsEnabled": {
+                                    "value": "[parameters('logsEnabled')]"
+                                },
+                                "profileName": {
+                                    "value": "[parameters('profileName')]"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

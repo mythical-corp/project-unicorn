@@ -1,0 +1,175 @@
+name: Manage Flow Logs (per Azure Tenant)
+
+on:
+  workflow_dispatch:
+
+defaults:
+    run: 
+      shell: bash
+
+permissions:
+    id-token: write
+    contents: read
+
+jobs:
+  run-per-tenant:
+    strategy:
+      matrix:
+        env: [tenant-a, tenant-b] # GitHub Environments
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.env }}
+
+    env:
+      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }} # Central Subscription 
+      CENTRAL_STORAGE_RG: ${{ secrets.TF_BACKEND_RESOURCE_GROUP }} # Resource Group for central Storage Account
+      CENTRAL_STORAGE_ACCOUNT: ${{ secrets.TF_BACKEND_STORAGE_ACCOUNT }}  # Central Storage Account name used for flow logs & terraform backend state management.
+      CENTRAL_STORAGE_ID: ${{ secrets.TF_BACKEND_STORAGE_ID }} # Full Azure Resource ID of the central Storage Account.
+      CENTRAL_TF_BACKEND_CONTAINER: ${{ secrets.TF_BACKEND_CONTAINER }} # Name of the container storing the terraform state files.
+      CENTRAL_TF_BACKEND_FILE_PREFIX: unicorn # Terraform state file prefix.
+      ROOT_MANAGEMENT_GROUP_ID: ${{ secrets.ROOT_MG_ID }} # The Management Group ID used as policy assignment scope. 
+
+    steps:
+
+      - name: Code Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Azure CLI
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az account show
+            az storage -h
+
+      - name: Azure Login
+        uses: azure/login@v2
+        env:
+          AZURE_LOGIN_PRE_CLEANUP: true
+          AZURE_LOGIN_POST_CLEANUP: true
+        with:
+          client_id: ${{ env.ARM_CLIENT_ID }}
+          tenant_id: ${{ env.ARM_TENANT_ID }}
+          subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+          enable_AzPSSession: false
+
+      
+      - name: Discover client subscriptions
+        id: subs
+        shell: bash
+        run: |
+          set -euo pipefail
+          subs_json=$(az account list --all --query "[?tenantId=='${ARM_TENANT_ID}'].{id:id}" -o json)
+          filtered=$(echo "$subs_json" | jq --arg central "$ARM_SUBSCRIPTION_ID" '[.[] | select(.id != $central)]')
+          echo "subs=$filtered" >> "$GITHUB_OUTPUT"
+
+      - name: Enable Diagnostic Settings for Virtual Network via Azure Policy Autoremediation
+        id: terraform-azure-policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          subs=$(echo '${{ steps.subs.outputs.subs}} | jq -r '.[].id')
+
+          for SUB in $subs; do
+            echo "=== Processing subscription: $SUB ==="
+            az account set --subscription "$SUB"
+
+            export ARM_SUBSCRIPTION_ID_CURRENT="$SUB"
+
+            # Export TF variables for this run
+            export TF_VAR_tenant_id="$ARM_TENANT_ID"
+            export TF_VAR_subscription_id="$ARM_SUBSCRIPTION_ID_CURRENT"
+            export TF_VAR_management_group_id="$ROOT_MANAGEMENT_GROUP_ID"
+
+            terraform init \
+              -backend-config="storage_account_name=${{ env.CENTRAL_STORAGE_ACCOUNT }}"
+              -backend-config="container_name=${{ env.CENTRAL_TF_BACKEND_CONTAINER }}"
+              -backend-config="resource_group_name=${{ env.CENTRAL_STORAGE_RG }}"
+              -backend-config="key=${{ env.CENTRAL_TF_BACKEND_FILE_PREFIX }}-${var.subscription_id}"
+
+      
+      - name: Enable Flow Logs
+        id: enable-flow-logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          subs=$(echo '${{ steps.subs.outputs.subs}} | jq -r '.[].id')
+
+          for SUB in $subs; do
+            echo "=== Processing subscription: $SUB ==="
+            az account set --subscription "$SUB"
+
+            # List VNets in this subscription
+            vnets=$(az network vnet list -o json)
+            count=$(echo "$vnets" | jq 'length')
+            echo "Found $count VNets in subscription $SUB"
+
+            if [ "$count" -eq 0 ]; then
+              continue
+            fi
+
+            echo "$vnets" | jq -c '.[]' | while read vnet; do
+              vnet_name=$(echo "$vnet" | jq -r '.name')
+              vnet_rg=$(echo "$vnet" | jq -r '.resourceGroup')
+              vnet_loc=$(echo "$vnet" | jq -r '.location')
+
+              echo "---> enabling flow logs for Vnet: $vnet_name (RG: $vnet_rg, Location: $vnet_loc)"
+
+              # Ensure Network Watcher Exists
+              nw_name="Network Watcher_${vnet_loc}"
+              az network watcher configure \
+                --locations "$vnet_loc" \
+                --resource-group "NetworkWatcherRG" \
+                --enabled true || true
+
+              
+              # Create or update Vnet flow log
+              az network watcher flow-log create \
+                --location "$vnet_loc" \
+                --resource-group "$vnet_rg" \
+                --name "flowlog-${vnet_name}" \
+                --vnet "$vnet_name" \
+                --storage-account "$CENTRAL_STORAGE_ID" \
+                --enabled true \
+                --retention 30
+
+      - name: Disable Legacy Flow Logs
+        id: disable-legacy-flow-logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          subs=$(echo '${{ steps.subs.outputs.subs}} | jq -r '.[].id')
+
+          for SUB in $subs; do
+            echo "=== Processing subscription: $SUB ==="
+            az account set --subscription "$SUB"
+
+            # List all NSGs in this subscription
+            nsgs=$(az network nsg list -o json)
+            count=$(echo "$nsgs" | jq 'length')
+            echo "Found $count NSGs in subscription $SUB"
+
+            if [ "$count" -eq 0 ]; then
+              continue
+            fi
+
+            echo "$nsgs" | jq -c '.[]' | while read nsg; do
+              nsg_name=$(echo "$nsg" | jq -r '.name')
+              nsg_rg=$(echo "$nsg" | jq -r '.resourceGroup')
+              nsg_loc=$(echo "$nsg" | jq -r '.location')
+
+              echo "---> enabling flow logs for Vnet: $vnet_name (RG: $vnet_rg, Location: $vnet_loc)"
+
+              # Disable legacy NSG flow logs
+              az network watcher flow-log create \
+                --name "flowlog-${nsg_name}" \
+                --resource-group "$nsg_rg" \
+                --nsg "$nsg_name" \
+                --storage-account "$CENTRAL_STORAGE_ID" \
+                --enabled true \
+                --retention 30
+
+
+            done
+          done
