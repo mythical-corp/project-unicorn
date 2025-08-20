@@ -11,6 +11,16 @@ permissions:
     id-token: write
     contents: read
 
+env:
+    ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+    ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+    ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }} # Central Subscription 
+    CENTRAL_STORAGE_RG: ${{ secrets.TF_BACKEND_RESOURCE_GROUP }} # Resource Group for central Storage Account
+    CENTRAL_STORAGE_ACCOUNT: ${{ secrets.TF_BACKEND_STORAGE_ACCOUNT }}  # Central Storage Account name used for flow logs & terraform backend state management.
+    CENTRAL_STORAGE_ID: ${{ secrets.TF_BACKEND_STORAGE_ID }} # Full Azure Resource ID of the central Storage Account.
+    CENTRAL_TF_BACKEND_CONTAINER: ${{ secrets.TF_BACKEND_CONTAINER }} # Name of the container storing the terraform state files.
+    ROOT_MANAGEMENT_GROUP_ID: ${{ secrets.ROOT_MG_ID }} # The Management Group ID used as policy assignment scope. 
+
 jobs:
   run-per-tenant:
     strategy:
@@ -18,19 +28,7 @@ jobs:
         env: [tenant-A tenant-B] # GitHub Environments
     runs-on: ubuntu-latest
     environment: ${{ matrix.env }}
-
-    env:
-      ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-      ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }} # Central Subscription 
-      CENTRAL_STORAGE_RG: ${{ secrets.TF_BACKEND_RESOURCE_GROUP }} # Resource Group for central Storage Account
-      CENTRAL_STORAGE_ACCOUNT: ${{ secrets.TF_BACKEND_STORAGE_ACCOUNT }}  # Central Storage Account name used for flow logs & terraform backend state management.
-      CENTRAL_STORAGE_ID: ${{ secrets.TF_BACKEND_STORAGE_ID }} # Full Azure Resource ID of the central Storage Account.
-      CENTRAL_TF_BACKEND_CONTAINER: ${{ secrets.TF_BACKEND_CONTAINER }} # Name of the container storing the terraform state files.
-      ROOT_MANAGEMENT_GROUP_ID: ${{ secrets.ROOT_MG_ID }} # The Management Group ID used as policy assignment scope. 
-
     steps:
-
       - name: Code Checkout
         uses: actions/checkout@v4
 
