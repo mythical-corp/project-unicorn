@@ -1,3 +1,5 @@
+variable tenant_id {}
+
 variable management_group_id {
     type = string
     description = "The root Management Group to be used as policy definition assignment scope."
