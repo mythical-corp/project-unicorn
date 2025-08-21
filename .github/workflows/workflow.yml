@@ -4,193 +4,190 @@ on:
   workflow_dispatch:
 
 defaults:
-    run: 
-      shell: bash
+  run: 
+    shell: bash
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
-    workflow:
-        strategy:
-            matrix:
-                env: [tenant-A, tenant-B]
-        runs-on: ubuntu-latest
-        environment: ${{ matrix.env }}
+  workflow:
+    strategy:
+      matrix:
+        env: [tenant-A, tenant-B]
+    runs-on: ubuntu-latest
+    environment: ${{ matrix.env }}
 
-        permissions:
-         id-token: write
-         contents: read
+    env:
+        ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+        ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+        TENANT_NAME: ${{ matrix.env }}
+        LOCATION: northeurope
+        ROOT_MG_GROUP_ID: ${{ secrets.ROOT_MG_GROUP_ID }}
 
-        env:
-            ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-            ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-            ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-            TENANT_NAME: ${{ matrix.env }}
-            LOCATION: northeurope
-            ROOT_MG_GROUP_ID: ${{ secrets.ROOT_MG_GROUP_ID }}
+    steps:
+        - name: Code checkout
+          id: checkout
+          uses: actions/checkout@v4
 
-        steps:
-            - name: Code checkout
-              id: checkout
-              uses: actions/checkout@v4
+        - name: Terraform Setup
+          id: tfsetup
+          uses: hashicorp/setup-terraform@v3
+          with:
+            terraform_version: 1.8.5
 
-            - name: Terraform Setup
-              id: tfsetup
-              uses: hashicorp/setup-terraform@v3
-              with:
-                terraform_version: 1.8.5
+        - name: Azure Login (central subscription)
+          id: azlogin
+          uses: azure/login@v1
+          with:
+            client_id: ${{ secrets.CLIENT_ID }}
+            tenant_id: ${{ secrets.TENANT_ID }}
+            subscription_id: ${{ secrets.SUBSCRIPTION_ID }}
 
-            - name: Azure Login (central subscription)
-              id: azlogin
-              uses: azure/login@v1
-              with:
-                client_id: ${{ secrets.CLIENT_ID }}
-                tenant_id: ${{ secrets.TENANT_ID }}
-                subscription_id: ${{ secrets.SUBSCRIPTION_ID }}
+          # First apply with LOCAL backend (creates storage account)
+        - name: Terraform init (local state)
+          id: tfinit
+          working-directory: terraform/bootstrap_storage
+          run: terraform init -input=false
+        
+        - name: Terraform Apply (create resource group + storage account + tfstate container)
+          id: tfapply-bootstrap
+          working-directory: terraform/bootstrap_storage
+          env:
+            TF_VAR_tenant_id: ${{ env.ARM_TENANT_ID }}
+            TF_VAR_central_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+            TF_VAR_tenant_name: ${{ matrix.env }}
+            TF_VAR_location: ${{ env.LOCATION }}
+          run: terraform apply -auto-approve -input=false
+        - name: Capture Terraform Outputs
+          id: tfout
+          working-directory: terraform/bootstrap_storage
+          run: |
+            terraform output -json > tf_outputs.json
+            echo "sa_name=$(jq -r .storage_account_name.value tf_outputs.json)" >> "$GITHUB_OUTPUT"
+            echo "sa_rg=$(jq -r .storage_account_rg.value tf_outputs.json)" >> "$GITHUB_OUTPUT"
+            echo "sa_container=$(jq -r .storage_account_container.value tf_outputs.json) >> $GITHUB_OUTPUT"
+        
+        - name: Migrate local state to Azure Backend
+          id: tfmigrate
+          working-directory: terraform/bootstrap_storage
+          env:
+            SA_NAME: ${{ steps.tfout.outputs.sa_name }}
+            SA_RG: ${{ steps.tfout.outputs.sa_rg }}
+            CONTAINER: ${{ steps.tfout.outputs.sa_container }}
+            KEY: tenant/${{ env.TENANT_NAME }}.tfstate
+          run: |
+            terraform init \
+              -migrate-state \
+              -backend-config="resource_group_name=$SA_RG" \
+              -backend-config="storage_account_name=$SA_NAME" \
+              -backend-config="container_name=$SA_CONTAINER" \
+              -backend-config="key=$KEY"
+        - name: Deploy Azure Policy to enable Diagnostic Settings
+          id: tfapply-azpolicy
+          working-directory: terraform/diagnostic_settings
+          env: 
+            TF_VAR_management_group_id: ${{ env.ROOT_MG_GROUP_ID }}
+          run: |
+            terraform apply -auto-approve -input=false
+        - name: Discover client subscriptions
+          id: subs
+          shell: bash
+          run: |
+            set -euo pipefail
+            subs_json=$(az account list --all --query "[?tenantId=='${ARM_TENANT_ID}'].{id:id}" -o json)
+            filtered=$(echo "$subs_json" | jq --arg central "$ARM_SUBSCRIPTION_ID" '[.[] | select(.id != $central)]')
+            echo "subs=$filtered" >> "$GITHUB_OUTPUT"
+        
+        # Enable Virtual Network Flow Logs for all VNETs in the tenant
+        - name: Enable Flow Logs
+          id: enable-flow-logs
+          shell: bash
+          run: |
+            set -euo pipefail
+            subs=$(echo '${{ steps.subs.outputs.subs}} | jq -r '.[].id')
+  
+            for SUB in $subs; do
+              echo "=== Processing subscription: $SUB ==="
+              az account set --subscription "$SUB"
+  
+              # List VNets in this subscription
+              vnets=$(az network vnet list -o json)
+              count=$(echo "$vnets" | jq 'length')
+              echo "Found $count VNets in subscription $SUB"
+  
+              if [ "$count" -eq 0 ]; then
+                continue
+              fi
+  
+              echo "$vnets" | jq -c '.[]' | while read vnet; do
+                vnet_name=$(echo "$vnet" | jq -r '.name')
+                vnet_rg=$(echo "$vnet" | jq -r '.resourceGroup')
+                vnet_loc=$(echo "$vnet" | jq -r '.location')
+  
+                echo "---> enabling flow logs for Vnet: $vnet_name (RG: $vnet_rg, Location: $vnet_loc)"
+  
+                # Ensure Network Watcher Exists
+                nw_name="Network Watcher_${vnet_loc}"
+                az network watcher configure \
+                  --locations "$vnet_loc" \
+                  --resource-group "NetworkWatcherRG" \
+                  --enabled true || true
+                
+                # Create or update Vnet flow log
+                az network watcher flow-log create \
+                  --location "$vnet_loc" \
+                  --resource-group "$vnet_rg" \
+                  --name "flowlog-${vnet_name}" \
+                  --vnet "$vnet_name" \
+                  --storage-account "$CENTRAL_STORAGE_ID" \
+                  --enabled true \
+                  --retention 30
 
-              # First apply with LOCAL backend (creates storage account)
-            - name: Terraform init (local state)
-              id: tfinit
-              working-directory: terraform/bootstrap_storage
-              run: terraform init -input=false
+        # Disables legacy Network Security Group Flow Logs for all NSGs in the tenant         
+        - name: Disable Legacy Flow Logs
+          id: disable-legacy-flow-logs
+          shell: bash
+          run: |
+            set -euo pipefail
+            subs=$(echo '${{ steps.subs.outputs.subs}} | jq -r '.[].id')
+  
+            for SUB in $subs; do
+              echo "=== Processing subscription: $SUB ==="
+              az account set --subscription "$SUB"
+  
+              # List all NSGs in this subscription
+              nsgs=$(az network nsg list -o json)
+              count=$(echo "$nsgs" | jq 'length')
+              echo "Found $count NSGs in subscription $SUB"
+  
+              if [ "$count" -eq 0 ]; then
+                continue
+              fi
+  
+              echo "$nsgs" | jq -c '.[]' | while read nsg; do
+                nsg_name=$(echo "$nsg" | jq -r '.name')
+                nsg_rg=$(echo "$nsg" | jq -r '.resourceGroup')
+                nsg_loc=$(echo "$nsg" | jq -r '.location')
+  
+                echo "---> enabling flow logs for NSG: $nsg_name(RG: $nsg_rg, Location: $nsg_loc)"
+  
+                # Disable legacy NSG flow logs
+                az network watcher flow-log create \
+                  --name "flowlog-${nsg_name}" \
+                  --resource-group "$nsg_rg" \
+                  --nsg "$nsg_name" \
+                  --storage-account "$CENTRAL_STORAGE_ID" \
+                  --enabled true \
+                  --retention 30
+  
+  
+              done
+            done
             
-            - name: Terraform Apply (create resource group + storage account + tfstate container)
-              id: tfapply-bootstrap
-              working-directory: terraform/bootstrap_storage
-              env:
-                TF_VAR_tenant_id: ${{ env.ARM_TENANT_ID }}
-                TF_VAR_central_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
-                TF_VAR_tenant_name: ${{ matrix.env }}
-                TF_VAR_location: ${{ env.LOCATION }}
-              run: terraform apply -auto-approve -input=false
-
-            - name: Capture Terraform Outputs
-              id: tfout
-              working-directory: terraform/bootstrap_storage
-              run: |
-                terraform output -json > tf_outputs.json
-                echo "sa_name=$(jq -r .storage_account_name.value tf_outputs.json)" >> "$GITHUB_OUTPUT"
-                echo "sa_rg=$(jq -r .storage_account_rg.value tf_outputs.json)" >> "$GITHUB_OUTPUT"
-                echo "sa_container=$(jq -r .storage_account_container.value tf_outputs.json) >> $GITHUB_OUTPUT"
-            
-            - name: Migrate local state to Azure Backend
-              id: tfmigrate
-              working-directory: terraform/bootstrap_storage
-              env:
-                SA_NAME: ${{ steps.tfout.outputs.sa_name }}
-                SA_RG: ${{ steps.tfout.outputs.sa_rg }}
-                CONTAINER: ${{ steps.tfout.outputs.sa_container }}
-                KEY: tenant/${{ env.TENANT_NAME }}.tfstate
-              run: |
-                terraform init \
-                  -migrate-state \
-                  -backend-config="resource_group_name=$SA_RG" \
-                  -backend-config="storage_account_name=$SA_NAME" \
-                  -backend-config="container_name=$SA_CONTAINER" \
-                  -backend-config="key=$KEY"
-
-            - name: Deploy Azure Policy to enable Diagnostic Settings
-              id: tfapply-azpolicy
-              working-directory: terraform/diagnostic_settings
-              env: 
-                TF_VAR_management_group_id: ${{ env.ROOT_MG_GROUP_ID }}
-              run: |
-                terraform apply -auto-approve -input=false
-
-            - name: Discover client subscriptions
-              id: subs
-              shell: bash
-              run: |
-                set -euo pipefail
-                subs_json=$(az account list --all --query "[?tenantId=='${ARM_TENANT_ID}'].{id:id}" -o json)
-                filtered=$(echo "$subs_json" | jq --arg central "$ARM_SUBSCRIPTION_ID" '[.[] | select(.id != $central)]')
-                echo "subs=$filtered" >> "$GITHUB_OUTPUT"
-      
-            - name: Enable Flow Logs
-              id: enable-flow-logs
-              shell: bash
-              run: |
-                set -euo pipefail
-                subs=$(echo '${{ steps.subs.outputs.subs}} | jq -r '.[].id')
-      
-                for SUB in $subs; do
-                  echo "=== Processing subscription: $SUB ==="
-                  az account set --subscription "$SUB"
-      
-                  # List VNets in this subscription
-                  vnets=$(az network vnet list -o json)
-                  count=$(echo "$vnets" | jq 'length')
-                  echo "Found $count VNets in subscription $SUB"
-      
-                  if [ "$count" -eq 0 ]; then
-                    continue
-                  fi
-      
-                  echo "$vnets" | jq -c '.[]' | while read vnet; do
-                    vnet_name=$(echo "$vnet" | jq -r '.name')
-                    vnet_rg=$(echo "$vnet" | jq -r '.resourceGroup')
-                    vnet_loc=$(echo "$vnet" | jq -r '.location')
-      
-                    echo "---> enabling flow logs for Vnet: $vnet_name (RG: $vnet_rg, Location: $vnet_loc)"
-      
-                    # Ensure Network Watcher Exists
-                    nw_name="Network Watcher_${vnet_loc}"
-                    az network watcher configure \
-                      --locations "$vnet_loc" \
-                      --resource-group "NetworkWatcherRG" \
-                      --enabled true || true
-                    
-                    # Create or update Vnet flow log
-                    az network watcher flow-log create \
-                      --location "$vnet_loc" \
-                      --resource-group "$vnet_rg" \
-                      --name "flowlog-${vnet_name}" \
-                      --vnet "$vnet_name" \
-                      --storage-account "$CENTRAL_STORAGE_ID" \
-                      --enabled true \
-                      --retention 30
-
-            - name: Disable Legacy Flow Logs
-              id: disable-legacy-flow-logs
-              shell: bash
-              run: |
-                set -euo pipefail
-                subs=$(echo '${{ steps.subs.outputs.subs}} | jq -r '.[].id')
-      
-                for SUB in $subs; do
-                  echo "=== Processing subscription: $SUB ==="
-                  az account set --subscription "$SUB"
-      
-                  # List all NSGs in this subscription
-                  nsgs=$(az network nsg list -o json)
-                  count=$(echo "$nsgs" | jq 'length')
-                  echo "Found $count NSGs in subscription $SUB"
-      
-                  if [ "$count" -eq 0 ]; then
-                    continue
-                  fi
-      
-                  echo "$nsgs" | jq -c '.[]' | while read nsg; do
-                    nsg_name=$(echo "$nsg" | jq -r '.name')
-                    nsg_rg=$(echo "$nsg" | jq -r '.resourceGroup')
-                    nsg_loc=$(echo "$nsg" | jq -r '.location')
-      
-                    echo "---> enabling flow logs for NSG: $nsg_name(RG: $nsg_rg, Location: $nsg_loc)"
-      
-                    # Disable legacy NSG flow logs
-                    az network watcher flow-log create \
-                      --name "flowlog-${nsg_name}" \
-                      --resource-group "$nsg_rg" \
-                      --nsg "$nsg_name" \
-                      --storage-account "$CENTRAL_STORAGE_ID" \
-                      --enabled true \
-                      --retention 30
-      
-      
-                  done
-                done
-
-            - name: Done
-              run: echo "Bootstrap complete for ${{ matrix.env }} (tenant ${TENANT_NAME})"
-
-
+        - name: Done
+          run: echo "Bootstrap complete for ${{ matrix.env }} (tenant ${TENANT_NAME})"
 
 
