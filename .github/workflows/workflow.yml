@@ -25,7 +25,7 @@ jobs:
         ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         TENANT_NAME: ${{ matrix.env }}
         LOCATION: northeurope
-        ROOT_MG_GROUP_ID: ${{ secrets.ROOT_MG_GROUP_ID }}
+        ROOT_MG_GROUP: RootMG
 
     steps:
         - name: Code checkout
@@ -90,7 +90,7 @@ jobs:
           id: tfapply-azpolicy
           working-directory: terraform/diagnostic_settings
           env: 
-            TF_VAR_management_group: ${{ env.ROOT_MG_GROUP_ID }}
+            TF_VAR_management_group: /providers/Microsoft.Management/managementGroups/${{ env.ROOT_MG_GROUP }}
             TF_VAR_storage_account_id: ${{ steps.tfout.outputs.sa_id }}
           run: |
             terraform apply -auto-approve -input=false
