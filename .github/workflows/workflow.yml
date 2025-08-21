@@ -42,9 +42,9 @@ jobs:
           id: azlogin
           uses: azure/login@v1
           with:
-            client_id: ${{ secrets.CLIENT_ID }}
-            tenant_id: ${{ secrets.TENANT_ID }}
-            subscription_id: ${{ secrets.SUBSCRIPTION_ID }}
+            client_id: ${{ secrets.ARM_CLIENT_ID }}
+            tenant_id: ${{ secrets.ARM_TENANT_ID }}
+            subscription_id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
           # First apply with LOCAL backend (creates storage account)
         - name: Terraform init (local state)
@@ -186,7 +186,7 @@ jobs:
   
               done
             done
-            
+
         - name: Done
           run: echo "Bootstrap complete for ${{ matrix.env }} (tenant ${TENANT_NAME})"
 
