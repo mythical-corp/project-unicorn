@@ -24,6 +24,6 @@ resource "azurerm_storage_account" "flowlogs" {
 
 resource "azurerm_storage_container" "tfstate" {
   name = "tfstates"
-  storage_account_id = azurerm_resource_group.flowlogs.id
+  storage_account_id = azurerm_storage_account.flowlogs.id
   container_access_type = "private"
 }
