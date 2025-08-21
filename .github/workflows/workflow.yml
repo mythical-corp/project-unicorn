@@ -74,7 +74,7 @@ jobs:
         
         - name: Migrate local state to Azure Backend
           id: tfmigrate
-          working-directory: terraform/bootstrap_storage
+          working-directory: terraform/diagnostic_settings
           env:
             SA_NAME: ${{ steps.tfout.outputs.sa_name }}
             SA_RG: ${{ steps.tfout.outputs.sa_rg }}
