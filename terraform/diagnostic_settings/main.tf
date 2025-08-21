@@ -22,7 +22,7 @@ resource "azurerm_policy_definition" "def" {
 
 resource "azurerm_resource_policy_assignment" "def_assign" {
   name                 = "vnet-policy"
-  resource_id          = var.management_group
+  resource_id          = "/providers/Microsoft.Management/managementGroups/${var.management_group}"
   policy_definition_id = azurerm_policy_definition.def.id
 
   parameters = jsonencode({
