@@ -1,0 +1,89 @@
+name: Bootstrap Central Storage (per tenant)
+
+on:
+  workflow_dispatch:
+
+defaults:
+    run: 
+      shell: bash
+
+permissions:
+    id-token: write
+    contents: read
+
+jobs:
+    bootstrap:
+        strategy:
+            matrix:
+                env: [tenant-A, tenant-B]
+        runs-on: ubuntu-latest
+        environment: ${{ matrix.env }}
+
+        env:
+            ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+            ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+            ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+            TENANT_NAME: ${{ matrix.env }}
+            LOCATION: northeurope
+
+        steps:
+            - name: Code checkout
+              id: checkout
+              uses: actions/checkout@v4
+
+            - name: Terraform Setup
+              id: tfsetup
+              uses: hashicorp/setup-terraform@v3
+              with:
+                terraform_version: 1.8.5
+
+            - name: Azure Login (central subscription)
+              id: azlogin
+              uses: azure/login@v2
+              with:
+                client_id: ${{ secrets.CLIENT_ID }}
+                tenant_id: ${{ secrets.TENANT_ID }}
+                subscription_id: ${{ secrets.SUBSCRIPTION_ID }}
+
+              # First apply with LOCAL backend (creates storage account)
+            - name: Terraform init (local state)
+              id: tfinit
+              working-directory: terraform/bootstrap_storage
+              run: terraform init -input=false
+            
+            - name: Terraform Apply (create resource group + storage account + tfstate container)
+              working-directory: terraform/bootstrap_storage
+              env:
+                TF_VAR_tenant_id: ${{ env.ARM_TENANT_ID }}
+                TF_VAR_central_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
+                TF_VAR_tenant_name: ${{ matrix.env }}
+                TF_VAR_location: ${{ env.LOCATION }}
+              run: terraform apply -auto-approve -input=false
+
+            - name: Capture Terraform Outputs
+              id: tfout
+              working-directory: terraform/bootstrap_storage
+              run: |
+                terraform output -json > tf_outputs.json
+                echo "sa_name=$(jq -r .storage_account_name.value tf_outputs.json)" >> "$GITHUB_OUTPUT"
+                echo "sa_rg=$(jq -r .storage_account_rg.value tf_outputs.json)" >> "$GITHUB_OUTPUT"
+                echo "sa_container=$(jq -r .storage_account_container.value tf_outputs.json) >> $GITHUB_OUTPUT"
+            
+            - name: Migrate local state to Azure Backend
+              id: migrate
+              working-directory: terraform/tenants/${{ matrix.env }}
+              env:
+                SA_NAME: ${{ steps.tfout.outputs.sa_name }}
+                SA_RG: ${{ steps.tfout.outputs.sa_rg }}
+                CONTAINER: ${{ steps.tfout.outputs.sa_container }}
+                KEY: tenant/${{ env.TENANT_NAME }}.tfstate
+              run: |
+                terraform init \
+                  -migrate-state \
+                  -backend-config="resource_group_name=$SA_RG" \
+                  -backend-config="storage_account_name=$SA_NAME" \
+                  -backend-config="container_name=$SA_CONTAINER" \
+                  -backend-config="key=$KEY"
+            
+            - name: Done
+              run: echo "Bootstrap complete for ${{ matrix.env }} (tenant ${TENANT_NAME})"
