@@ -1,14 +1,12 @@
-variable tenant_id {}
-
-variable management_group_id {
-    type = string
-    description = "The root Management Group to be used as policy definition assignment scope."
+variable "management_group_id" {
+  type        = string
+  description = "The root Management Group to be used as policy definition assignment scope."
 }
 
 variable "storage_account_id" {
-  type = any
+  type        = any
   description = "The Resource ID of the central storage account used for storing the diagnostic settings."
-  default = {}
+  default     = {}
 }
 
 
