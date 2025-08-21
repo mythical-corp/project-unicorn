@@ -28,7 +28,7 @@ variable "policy_category" {
 
 
 locals {
-  policy_json = jsondecode(file("${path.module}/vnet_policy.json"))
+  policy_json = jsondecode(file("vnet_policy.json"))
 
   parameters   = try(local.policy_json.properties.parameters, {})
   policy_rule  = try(local.policy_json.properties.policyRule, {})
