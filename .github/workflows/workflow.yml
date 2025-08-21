@@ -61,6 +61,7 @@ jobs:
             TF_VAR_tenant_name: ${{ matrix.env }}
             TF_VAR_location: ${{ env.LOCATION }}
           run: terraform apply -auto-approve -input=false
+
         - name: Capture Terraform Outputs
           id: tfout
           working-directory: terraform/bootstrap_storage
@@ -85,6 +86,7 @@ jobs:
               -backend-config="storage_account_name=$SA_NAME" \
               -backend-config="container_name=$SA_CONTAINER" \
               -backend-config="key=$KEY"
+              
         - name: Deploy Azure Policy to enable Diagnostic Settings
           id: tfapply-azpolicy
           working-directory: terraform/diagnostic_settings
