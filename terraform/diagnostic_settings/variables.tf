@@ -1,6 +1,7 @@
-variable "management_group_id" {
+variable "management_group" {
   type        = string
   description = "The root Management Group to be used as policy definition assignment scope."
+  default     = "RootMG"
 }
 
 variable "storage_account_id" {

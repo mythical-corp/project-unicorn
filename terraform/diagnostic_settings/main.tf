@@ -1,7 +1,3 @@
-data "azurerm_management_group" "root-mg" {
-  name = var.management_group_id
-}
-
 resource "azurerm_policy_definition" "def" {
   name         = local.policy_name
   display_name = local.display_name
@@ -9,7 +5,7 @@ resource "azurerm_policy_definition" "def" {
   policy_type  = "Custom"
   mode         = var.policy_mode
 
-  management_group_id = var.management_group_id
+  management_group_id = "/providers/Microsoft.Management/managementGroups/${var.management_group}"
 
   metadata    = jsonencode(local.metadata)
   parameters  = length(local.parameters) > 0 ? jsonencode(local.parameters) : null
