@@ -1,4 +1,4 @@
-name: Bootstrap Central Storage (per tenant)
+name: Enable flow logs + diagnostic settings to all clients (in 2 tenants)
 
 on:
   workflow_dispatch:
