@@ -70,7 +70,6 @@ jobs:
             echo "sa_name=$(jq -r .storage_account_name.value tf_outputs.json)" >> "$GITHUB_OUTPUT"
             echo "sa_id=$(jq -r .storage_account_name.id tf_outputs.json)" >> "$GITHUB_OUTPUT"
             echo "sa_rg=$(jq -r .storage_account_rg.value tf_outputs.json)" >> "$GITHUB_OUTPUT"
-            echo "sa_container=$(jq -r .storage_account_container.value tf_outputs.json) >> $GITHUB_OUTPUT"
         
         - name: Migrate local state to Azure Backend
           id: tfmigrate
@@ -78,14 +77,13 @@ jobs:
           env:
             SA_NAME: ${{ steps.tfout.outputs.sa_name }}
             SA_RG: ${{ steps.tfout.outputs.sa_rg }}
-            SA_CONTAINER: ${{ steps.tfout.outputs.sa_container }}
             KEY: ${{ env.TENANT_NAME }}.tfstate
           run: |
             terraform init \
               -migrate-state \
               -backend-config="resource_group_name=$SA_RG" \
               -backend-config="storage_account_name=$SA_NAME" \
-              -backend-config="container_name=$SA_CONTAINER" \
+              -backend-config="container_name=tfstates" \
               -backend-config="key=$KEY"
 
         - name: Deploy Azure Policy to enable Diagnostic Settings
