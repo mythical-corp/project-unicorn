@@ -68,6 +68,7 @@ jobs:
           run: |
             terraform output -json > tf_outputs.json
             echo "sa_name=$(jq -r .storage_account_name.value tf_outputs.json)" >> "$GITHUB_OUTPUT"
+            echo "sa_id=$(jq -r .storage_account_name.id tf_outputs.json)" >> "$GITHUB_OUTPUT"
             echo "sa_rg=$(jq -r .storage_account_rg.value tf_outputs.json)" >> "$GITHUB_OUTPUT"
             echo "sa_container=$(jq -r .storage_account_container.value tf_outputs.json) >> $GITHUB_OUTPUT"
         
@@ -92,6 +93,7 @@ jobs:
           working-directory: terraform/diagnostic_settings
           env: 
             TF_VAR_management_group_id: ${{ env.ROOT_MG_GROUP_ID }}
+            TF_VAR_storage_account_id: ${{ steps.tfout.outputs.sa_id }}
           run: |
             terraform apply -auto-approve -input=false
 

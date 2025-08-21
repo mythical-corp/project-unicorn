@@ -29,4 +29,9 @@ resource "azurerm_resource_policy_assignment" "def_assign" {
   resource_id          = data.azurerm_management_group.root-mg.id
   policy_definition_id = azurerm_policy_definition.def.id
 
+  parameters = jsonencode({
+    storageAccountId = {
+      value = var.storage_account_id 
+    }
+  })
 }

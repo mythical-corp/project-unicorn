@@ -3,6 +3,13 @@ variable management_group_id {
     description = "The root Management Group to be used as policy definition assignment scope."
 }
 
+variable "storage_account_id" {
+  type = any
+  description = "The Resource ID of the central storage account used for storing the diagnostic settings."
+  default = {}
+}
+
+
 variable "policy_name" {
   type        = string
   description = "Name to be used for this policy."
@@ -89,7 +96,7 @@ locals {
   )))
 
   title    = title(replace(local.policy_name, "/-|_|\\s/", " "))
-  category = var.policy_category
+  category = "Monitoring"
   version  = "1.0.0"
 
   policy_name  = coalesce(var.policy_name, try((local.policy_object).name, null))
@@ -98,5 +105,6 @@ locals {
   metadata     = coalesce(var.policy_metadata, try((local.policy_object).properties.metadata))
   parameters   = coalesce(var.policy_parameters, try((local.policy_object).properties.parameters, null))
   policy_rule  = coalesce(var.policy_rule, try((local.policy_object).properties.policyRule, null))
+
 
 }
