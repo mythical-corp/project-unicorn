@@ -40,7 +40,7 @@ jobs:
 
             - name: Azure Login (central subscription)
               id: azlogin
-              uses: azure/login@v2
+              uses: azure/login@v1
               with:
                 client_id: ${{ secrets.CLIENT_ID }}
                 tenant_id: ${{ secrets.TENANT_ID }}
