@@ -14,7 +14,7 @@ jobs:
                 env: [tenant-A, tenant-B]
         runs-on: ubuntu-latest
         environment: ${{ matrix.env }}
-        
+
         permissions:
          id-token: write
          contents: read
@@ -45,7 +45,6 @@ jobs:
                 client_id: ${{ secrets.CLIENT_ID }}
                 tenant_id: ${{ secrets.TENANT_ID }}
                 subscription_id: ${{ secrets.SUBSCRIPTION_ID }}
-                auth-type: ID_TOKEN
 
               # First apply with LOCAL backend (creates storage account)
             - name: Terraform init (local state)
