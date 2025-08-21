@@ -50,7 +50,7 @@ jobs:
         - name: Terraform init (local state)
           id: tfinit
           working-directory: terraform/bootstrap_storage
-          run: terraform init -input=false
+          run: terraform init -input=false -backend=false
         
         - name: Terraform Apply (create resource group + storage account + tfstate container)
           id: tfapply-bootstrap
