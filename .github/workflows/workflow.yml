@@ -25,6 +25,7 @@ jobs:
             ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
             TENANT_NAME: ${{ matrix.env }}
             LOCATION: northeurope
+            ROOT_MG_GROUP_ID: ${{ secrets.ROOT_MG_GROUP_ID }}
 
         steps:
             - name: Code checkout
@@ -88,7 +89,108 @@ jobs:
 
             - name: Deploy Azure Policy to enable Diagnostic Settings
               id: tfapply-azpolicy
-              working-directory: terraform/
-            
+              working-directory: terraform/diagnostic_settings
+              env: 
+                TF_VAR_management_group_id: ${{ env.ROOT_MG_GROUP_ID }}
+              run: |
+                terraform apply -auto-approve -input=false
+
+            - name: Discover client subscriptions
+              id: subs
+              shell: bash
+              run: |
+                set -euo pipefail
+                subs_json=$(az account list --all --query "[?tenantId=='${ARM_TENANT_ID}'].{id:id}" -o json)
+                filtered=$(echo "$subs_json" | jq --arg central "$ARM_SUBSCRIPTION_ID" '[.[] | select(.id != $central)]')
+                echo "subs=$filtered" >> "$GITHUB_OUTPUT"
+      
+            - name: Enable Flow Logs
+              id: enable-flow-logs
+              shell: bash
+              run: |
+                set -euo pipefail
+                subs=$(echo '${{ steps.subs.outputs.subs}} | jq -r '.[].id')
+      
+                for SUB in $subs; do
+                  echo "=== Processing subscription: $SUB ==="
+                  az account set --subscription "$SUB"
+      
+                  # List VNets in this subscription
+                  vnets=$(az network vnet list -o json)
+                  count=$(echo "$vnets" | jq 'length')
+                  echo "Found $count VNets in subscription $SUB"
+      
+                  if [ "$count" -eq 0 ]; then
+                    continue
+                  fi
+      
+                  echo "$vnets" | jq -c '.[]' | while read vnet; do
+                    vnet_name=$(echo "$vnet" | jq -r '.name')
+                    vnet_rg=$(echo "$vnet" | jq -r '.resourceGroup')
+                    vnet_loc=$(echo "$vnet" | jq -r '.location')
+      
+                    echo "---> enabling flow logs for Vnet: $vnet_name (RG: $vnet_rg, Location: $vnet_loc)"
+      
+                    # Ensure Network Watcher Exists
+                    nw_name="Network Watcher_${vnet_loc}"
+                    az network watcher configure \
+                      --locations "$vnet_loc" \
+                      --resource-group "NetworkWatcherRG" \
+                      --enabled true || true
+                    
+                    # Create or update Vnet flow log
+                    az network watcher flow-log create \
+                      --location "$vnet_loc" \
+                      --resource-group "$vnet_rg" \
+                      --name "flowlog-${vnet_name}" \
+                      --vnet "$vnet_name" \
+                      --storage-account "$CENTRAL_STORAGE_ID" \
+                      --enabled true \
+                      --retention 30
+
+            - name: Disable Legacy Flow Logs
+              id: disable-legacy-flow-logs
+              shell: bash
+              run: |
+                set -euo pipefail
+                subs=$(echo '${{ steps.subs.outputs.subs}} | jq -r '.[].id')
+      
+                for SUB in $subs; do
+                  echo "=== Processing subscription: $SUB ==="
+                  az account set --subscription "$SUB"
+      
+                  # List all NSGs in this subscription
+                  nsgs=$(az network nsg list -o json)
+                  count=$(echo "$nsgs" | jq 'length')
+                  echo "Found $count NSGs in subscription $SUB"
+      
+                  if [ "$count" -eq 0 ]; then
+                    continue
+                  fi
+      
+                  echo "$nsgs" | jq -c '.[]' | while read nsg; do
+                    nsg_name=$(echo "$nsg" | jq -r '.name')
+                    nsg_rg=$(echo "$nsg" | jq -r '.resourceGroup')
+                    nsg_loc=$(echo "$nsg" | jq -r '.location')
+      
+                    echo "---> enabling flow logs for NSG: $nsg_name(RG: $nsg_rg, Location: $nsg_loc)"
+      
+                    # Disable legacy NSG flow logs
+                    az network watcher flow-log create \
+                      --name "flowlog-${nsg_name}" \
+                      --resource-group "$nsg_rg" \
+                      --nsg "$nsg_name" \
+                      --storage-account "$CENTRAL_STORAGE_ID" \
+                      --enabled true \
+                      --retention 30
+      
+      
+                  done
+                done
+
             - name: Done
               run: echo "Bootstrap complete for ${{ matrix.env }} (tenant ${TENANT_NAME})"
+
+
+
+
