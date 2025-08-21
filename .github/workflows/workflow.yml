@@ -45,6 +45,7 @@ jobs:
                 client_id: ${{ secrets.CLIENT_ID }}
                 tenant_id: ${{ secrets.TENANT_ID }}
                 subscription_id: ${{ secrets.SUBSCRIPTION_ID }}
+                auth-type: ID_TOKEN
 
               # First apply with LOCAL backend (creates storage account)
             - name: Terraform init (local state)
