@@ -108,6 +108,8 @@ jobs:
         - name: Enable Flow Logs
           id: enable-flow-logs
           shell: bash
+          env:
+            SA_ID: ${{ steps.tfout.outputs.sa_id }}
           run: |
             set -euo pipefail
             subs=$(echo '${{ steps.subs.outputs.subs}} | jq -r '.[].id')
@@ -145,7 +147,7 @@ jobs:
                   --resource-group "$vnet_rg" \
                   --name "flowlog-${vnet_name}" \
                   --vnet "$vnet_name" \
-                  --storage-account "$CENTRAL_STORAGE_ID" \
+                  --storage-account "$SA_ID" \
                   --enabled true \
                   --retention 30
 
@@ -182,7 +184,7 @@ jobs:
                   --name "flowlog-${nsg_name}" \
                   --resource-group "$nsg_rg" \
                   --nsg "$nsg_name" \
-                  --storage-account "$CENTRAL_STORAGE_ID" \
+                  --storage-account "$SA_ID" \
                   --enabled true \
                   --retention 30
   
