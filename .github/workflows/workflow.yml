@@ -78,8 +78,8 @@ jobs:
           env:
             SA_NAME: ${{ steps.tfout.outputs.sa_name }}
             SA_RG: ${{ steps.tfout.outputs.sa_rg }}
-            CONTAINER: ${{ steps.tfout.outputs.sa_container }}
-            KEY: tenant/${{ env.TENANT_NAME }}.tfstate
+            SA_CONTAINER: ${{ steps.tfout.outputs.sa_container }}
+            KEY: ${{ env.TENANT_NAME }}.tfstate
           run: |
             terraform init \
               -migrate-state \
