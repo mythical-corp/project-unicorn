@@ -12,7 +12,7 @@ permissions:
     contents: read
 
 jobs:
-    bootstrap:
+    workflow:
         strategy:
             matrix:
                 env: [tenant-A, tenant-B]
@@ -52,6 +52,7 @@ jobs:
               run: terraform init -input=false
             
             - name: Terraform Apply (create resource group + storage account + tfstate container)
+              id: tfapply-bootstrap
               working-directory: terraform/bootstrap_storage
               env:
                 TF_VAR_tenant_id: ${{ env.ARM_TENANT_ID }}
@@ -70,8 +71,8 @@ jobs:
                 echo "sa_container=$(jq -r .storage_account_container.value tf_outputs.json) >> $GITHUB_OUTPUT"
             
             - name: Migrate local state to Azure Backend
-              id: migrate
-              working-directory: terraform/tenants/${{ matrix.env }}
+              id: tfmigrate
+              working-directory: terraform/bootstrap_storage
               env:
                 SA_NAME: ${{ steps.tfout.outputs.sa_name }}
                 SA_RG: ${{ steps.tfout.outputs.sa_rg }}
@@ -84,6 +85,10 @@ jobs:
                   -backend-config="storage_account_name=$SA_NAME" \
                   -backend-config="container_name=$SA_CONTAINER" \
                   -backend-config="key=$KEY"
+
+            - name: Deploy Azure Policy to enable Diagnostic Settings
+              id: tfapply-azpolicy
+              working-directory: terraform/
             
             - name: Done
               run: echo "Bootstrap complete for ${{ matrix.env }} (tenant ${TENANT_NAME})"

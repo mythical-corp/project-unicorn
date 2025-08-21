@@ -82,10 +82,10 @@ variable "file_path" {
 locals {
   policy_object = jsondecode(coalesce(try(
     file(var.file_path),
-    file("${path.cwd}/policies/${var.policy_name}.json"),
-    file("${path.root}/policies/${var.policy_name}.json"),
-    file("${path.root}/../policies/${var.policy_name}.json"),
-    file("${path.root}/../../policies/${var.policy_name}.json"),
+    file("${path.cwd}/${var.policy_name}.json"),
+    file("${path.root}/${var.policy_name}.json"),
+    file("${path.root}/../${var.policy_name}.json"),
+    file("${path.root}/../../${var.policy_name}.json"),
   )))
 
   title    = title(replace(local.policy_name, "/-|_|\\s/", " "))

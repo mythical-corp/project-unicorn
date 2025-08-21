@@ -25,7 +25,8 @@ resource "azurerm_policy_definition" "def" {
 }
 
 resource "azurerm_resource_policy_assignment" "def_assign" {
-  name                 = "enable-vnet-diagnostic-settings"
+  name                 = "vnet-policy"
   resource_id          = data.azurerm_management_group.root-mg.id
   policy_definition_id = azurerm_policy_definition.def.id
+
 }
