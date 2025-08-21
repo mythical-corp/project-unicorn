@@ -5,8 +5,8 @@ resource "azurerm_resource_group" "central_storage" {
 
 resource "azurerm_storage_account" "central_storage" {
   name                     = "stcentral${replace(lower(var.tenant_name), "-", "")}"
-  resource_group_name      = azurerm_resource_group.flowlogs.name
-  location                 = azurerm_resource_group.flowlogs.location
+  resource_group_name      = azurerm_resource_group.central_storage.name
+  location                 = azurerm_resource_group.central_storage.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
 
