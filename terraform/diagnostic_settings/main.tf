@@ -20,14 +20,13 @@ resource "azurerm_policy_definition" "def" {
   }
 }
 
-resource "azurerm_resource_policy_assignment" "def_assign" {
+resource "azurerm_management_group_policy_assignment" "def_assign" {
   name                 = "vnet-policy"
-  resource_id          = "/providers/Microsoft.Management/managementGroups/${var.management_group}"
   policy_definition_id = azurerm_policy_definition.def.id
-
+  management_group_id  = "/providers/Microsoft.Management/managementGroups/${var.management_group}"
   parameters = jsonencode({
     storageAccountId = {
-      value = var.storage_account_id 
+      value = var.storage_account_id
     }
   })
 }
