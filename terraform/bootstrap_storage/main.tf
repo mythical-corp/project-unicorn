@@ -4,7 +4,7 @@ resource "azurerm_resource_group" "flowlogs" {
 }
 
 resource "azurerm_storage_account" "flowlogs" {
-    name = "st${var.tenant_name}flowlogs"
+    name = "st${replace(lower(var.tenant_name), "-", "")}flowlogs"
     resource_group_name = azurerm_resource_group.flowlogs.name
     location = azurerm_resource_group.flowlogs.location
     account_tier = "Standard"

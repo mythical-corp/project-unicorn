@@ -86,7 +86,7 @@ jobs:
               -backend-config="storage_account_name=$SA_NAME" \
               -backend-config="container_name=$SA_CONTAINER" \
               -backend-config="key=$KEY"
-              
+
         - name: Deploy Azure Policy to enable Diagnostic Settings
           id: tfapply-azpolicy
           working-directory: terraform/diagnostic_settings
@@ -94,6 +94,7 @@ jobs:
             TF_VAR_management_group_id: ${{ env.ROOT_MG_GROUP_ID }}
           run: |
             terraform apply -auto-approve -input=false
+
         - name: Discover client subscriptions
           id: subs
           shell: bash
