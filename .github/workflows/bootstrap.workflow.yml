@@ -74,9 +74,9 @@ jobs:
           id: tfmigrate
           working-directory: terraform/bootstrap_storage
           env:
-            SA_NAME: ${{ steps.tfout.outputs.sa_name }}
-            SA_RG: ${{ steps.tfout.outputs.sa_rg }}
-            SA_CONTAINER: ${{ steps.tfout.outputs.sa_container }}
+            SA_NAME: ${{ steps.tfouts.outputs.sa_name }}
+            SA_RG: ${{ steps.tfouts.outputs.sa_rg }}
+            SA_CONTAINER: ${{ steps.tfouts.outputs.sa_container }}
             KEY: ${{ matrix.env }}.tfstate
           run: |
             terraform init \
