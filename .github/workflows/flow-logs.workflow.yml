@@ -105,7 +105,7 @@ jobs:
           id: enable-flow-logs
           shell: bash
           env:
-            SA_ID: ${{ steps.tfout.outputs.sa_id }}
+            SA_ID: /subscriptions/${{ env.ARM_SUBSCRIPTION_ID }}/resourceGroups/${{ steps.backend.outputs.sa_rg }}
           run: |
             set -euo pipefail
             subs=$(echo '${{ steps.subs.outputs.subs}} | jq -r '.[].id')
