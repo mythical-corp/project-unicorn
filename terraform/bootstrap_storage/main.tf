@@ -1,8 +1,10 @@
+# Creates resource group in default subscription
 resource "azurerm_resource_group" "central_storage" {
   name     = "rg-central-${var.tenant_name}"
   location = var.location
 }
 
+# Creates central storage account in default subscription
 resource "azurerm_storage_account" "central_storage" {
   name                     = "stcentral${replace(lower(var.tenant_name), "-", "")}"
   resource_group_name      = azurerm_resource_group.central_storage.name
@@ -22,6 +24,7 @@ resource "azurerm_storage_account" "central_storage" {
   }
 }
 
+# Creates container for terraform state in central storage account
 resource "azurerm_storage_container" "central_storage" {
   name                  = "tfstates"
   storage_account_name  = azurerm_storage_account.central_storage.name
