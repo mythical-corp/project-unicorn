@@ -79,7 +79,7 @@
                     },
                     {
                         "field": "location",
-                        "equals": "[parameters('azureRegions)]"
+                        "equals": "[parameters('azureRegions')]"
                     }
                 ]
             },
