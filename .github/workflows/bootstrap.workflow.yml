@@ -1,5 +1,5 @@
 # This CI/CD workflow creates a storage account in central subscription used for managing the terraform state backend and collection of flow logs (per tenant).
-name: Bootstrap pipeline (Once per tenant)
+name: Bootstrap pipeline # runs once per Tenant
 
 on:
   workflow_dispatch:
