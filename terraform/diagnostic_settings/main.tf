@@ -1,5 +1,5 @@
 resource "azurerm_policy_definition" "def" {
-  name         = local.policy_name
+  name         = "vnet-policy-diags-sett"
   display_name = local.display_name
   description  = local.description
   policy_type  = "Custom"
