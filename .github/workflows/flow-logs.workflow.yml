@@ -46,20 +46,38 @@ jobs:
             client-id: ${{ secrets.AZURE_CLIENT_ID }}
             tenant-id: ${{ secrets.AZURE_TENANT_ID }}
             subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+        - name: Download Backend info
+          uses: actions/download-artifact@v4
+          with:
+            name: backend-info-${{ matrix.env }}
+            path: ./backend
+        
+        - name: Parse Backend info
+          id: backend
+          run: |
+            sa_name=$(jq -r '.storage_account_name.value' ./backend/tf_outputs.json)
+            sa_rg=$(jq -r '.storage_account_rg.name.value' ./backend/tf_outputs.json)
+            container=$(jq -r '.storage_account_container.name.value' ./backend/tf_outputs.json)
+
+            echo "sa_name=$sa_name" >> $GITHUB_OUTPUT
+            echo "sa_rg=$sa_rg" >> $GITHUB_OUTPUT
+            echo "container=$container" >> $GITHUB_OUTPUT
         
         - name: Terraform state sync to Azure Backend
           id: tfinit
           working-directory: terraform/bootstrap_storage
           env:
-            SA_NAME: ${{ steps.tfout.outputs.sa_name }}
-            SA_RG: ${{ steps.tfout.outputs.sa_rg }}
-            KEY: ${{ env.TENANT_NAME }}.tfstate
+            SA_NAME: ${{ steps.backend.outputs.sa_name }}
+            SA_RG: ${{ steps.backend.outputs.sa_rg }}
+            CONTAINER: ${{ steps.backend.outputs.container }}
+            KEY: ${{ matrix.env }}.tfstate
           run: |
             terraform init \
               -migrate-state \
               -backend-config="resource_group_name=$SA_RG" \
               -backend-config="storage_account_name=$SA_NAME" \
-              -backend-config="container_name=tfstates" \
+              -backend-config="container_name=$CONTAINER" \
               -backend-config="key=$KEY"
 
         - name: Deploy Azure Policy to enable Diagnostic Settings

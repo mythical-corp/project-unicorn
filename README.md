@@ -1,8 +1,24 @@
 # Project-Unicorn
 
-This CI/CD pipeline is designed to do 3 things:
+The pipelines are designed to run per Azure tenant. <br>
+For that, I have configured 2 GitHub Environments [tenant-A, tenant-B] that map to each Azure tenant.<br>
+Each environment contains service principal details stored securely as GitHub Secrets. The details are used to authenticate the pipeline to Azure by impersonating a service principal in that tenant.
+The service principal uses Entra ID configured Federated credentials and authorizes the workflow to use OIDC tokens:
 
-1. Bootstrap a central storage account in each tenant to be used for storing the terraform state files and collecting VNet Flow Logs.
-2. Enable Virtual Network Diagnostic Settings via Azure Policy. The policy is assigned at the root Management Group level to include in scope all client subscriptions. The policy automatically enables the diagnostic settings on any existing (and new) Virtual Networks from a tenant.
-3. Scan all subscriptions (clients) and enable Flow Logs across all client VNETs (using Azure CLI command).
-4. Disable legacy Network Security Group Flow Logs on all client NSGs (both tenants).
+```bash
+permissions:
+  id-token: write
+  contents: read
+```
+<br>
+
+## [bootstrap.workflow.yml](.github/workflows/bootstrap.workflow.yml)
+First CI/CD pipeline is designed to bootstrap a central storage account in each Azure tenant to be used for storing the terraform state files and collecting VNet Flow Logs.
+
+
+
+##[flow-logs.workflow.yml](.github/workflows/flow-logs.workflow.yml)
+Second GitHub Actions workflow 'flow-logs.workflow.yml' is designed to do 3 things:
+1. Enable Virtual Network Diagnostic Settings via Azure Policy. The policy is assigned at the root Management Group level to include in scope all client subscriptions. The policy automatically enables the diagnostic settings on any existing (and new) Virtual Networks from a tenant.
+2. Scan all subscriptions (clients) and enable Flow Logs across all client VNETs (using Azure CLI command).
+3. Disable legacy Network Security Group Flow Logs on all client NSGs (both tenants).

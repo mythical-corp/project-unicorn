@@ -26,7 +26,7 @@ resource "azurerm_management_group_policy_assignment" "def_assign" {
   management_group_id  = "/providers/Microsoft.Management/managementGroups/${var.management_group}"
   parameters = jsonencode({
     storageAccountId = {
-      value = var.storage_account_id
+      value = "/subscriptions/${var.subscription_id}/resourceGroups/${var.storage_account_rg}/providers/Microsoft.Storage/storageAccounts/${var.storage_account_id}"
     }
   })
 }
