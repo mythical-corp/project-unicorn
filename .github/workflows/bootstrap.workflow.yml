@@ -67,12 +67,10 @@ jobs:
             terraform output -json > tf_outputs.json
             sa_rg=$(jq -r '.storage_account_rg.value' tf_outputs.json)
             sa_name=$(jq -r '.storage_account_name.value' tf_outputs.json)
-            sa_id=$(jq -r '.storage_account_id' tf_outputs.json)
             sa_container=$(jq -r '.storage_account_container' tf_outputs.json)
 
             echo "sa_rg=${sa_rg}" >> $GITHUB_OUTPUT
             echo "sa_name=${sa_name}" >> $GITHUB_OUTPUT
-            echo "sa_id=${sa_id}" >> $GITHUB_OUTPUT
             echo "sa_container=${sa_container}" >> $GITHUB_OUTPUT
         
         - name: Migrate local state to Azure Backend
