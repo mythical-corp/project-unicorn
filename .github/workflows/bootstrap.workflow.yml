@@ -95,6 +95,6 @@ jobs:
               -backend-config="key=$KEY"
             
         - name: Done
-          run: echo "Bootstrap complete for ${{ matrix.env }} (tenant ${TENANT_NAME})"
+          run: echo "Bootstrap complete for ${{ matrix.env }} tenant"
 
        

@@ -85,7 +85,9 @@ jobs:
           working-directory: terraform/diagnostic_settings
           env: 
             TF_VAR_management_group: ${{ env.ROOT_MG_GROUP }}
-            TF_VAR_storage_account_id: ${{ steps.tfout.outputs.sa_id }}
+            TF_VAR_storage_account_name: ${{ steps.backend.outputs.sa_name }}
+            TF_VAR_storage_account_rg: ${{ steps.backend.outputs.sa_rg }}
+            TF_VAR_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
           run: |
             terraform apply -auto-approve -input=false
 
@@ -187,6 +189,6 @@ jobs:
             done
 
         - name: Done
-          run: echo "Bootstrap complete for ${{ matrix.env }} (tenant ${TENANT_NAME})"
+          run: echo "Bootstrap complete for ${{ matrix.env }} tenant"
 
 

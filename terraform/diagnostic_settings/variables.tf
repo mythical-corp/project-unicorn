@@ -4,10 +4,22 @@ variable "management_group" {
   default     = "RootMG"
 }
 
+variable "subscription_id" {
+  type = string
+  description = "The central Subscription ID."
+  default = ""
+}
+
+variable "storage_account_rg" {
+  type = string
+  description = "TThe Resource Group of the central Storage Account used for storing the diagnostic settings."
+  default = ""
+}
+
 variable "storage_account_id" {
   type        = any
   description = "The Resource ID of the central storage account used for storing the diagnostic settings."
-  default     = {}
+  default     = ""
 }
 
 variable "policy_mode" {
