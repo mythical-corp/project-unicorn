@@ -60,6 +60,12 @@ jobs:
             TF_VAR_location: ${{ env.LOCATION }}
           run: terraform apply -auto-approve -input=false
 
+        - name: Debug
+          run: |
+            terraform output -json > tf_outputs.json
+            cat tf_outputs.json
+            jq '.storage_account_name' tf_outputs.json
+
         - name: Capture Terraform Outputs
           id: tfouts
           working-directory: terraform/bootstrap_storage
@@ -67,11 +73,9 @@ jobs:
             terraform output -json > tf_outputs.json
             sa_rg=$(jq -r '.storage_account_rg.value' tf_outputs.json)
             sa_name=$(jq -r '.storage_account_name.value' tf_outputs.json)
-            sa_container=$(jq -r '.storage_account_container' tf_outputs.json)
 
             echo "sa_rg=${sa_rg}" >> $GITHUB_OUTPUT
             echo "sa_name=${sa_name}" >> $GITHUB_OUTPUT
-            echo "sa_container=${sa_container}" >> $GITHUB_OUTPUT
         
         - name: Migrate local state to Azure Backend
           id: tfmigrate
@@ -79,7 +83,7 @@ jobs:
           env:
             SA_NAME: ${{ steps.tfouts.outputs.sa_name }}
             SA_RG: ${{ steps.tfouts.outputs.sa_rg }}
-            SA_CONTAINER: ${{ steps.tfouts.outputs.sa_container }}
+            SA_CONTAINER: tfstates
             KEY: ${{ matrix.env }}.tfstate
           run: |
             terraform init \

@@ -26,7 +26,7 @@ resource "azurerm_storage_account" "central_storage" {
 
 # Creates container for terraform state in central storage account
 resource "azurerm_storage_container" "central_storage" {
-  name                  = "tfstates"
+  name                  = var.container_name
   storage_account_name  = azurerm_storage_account.central_storage.name
   container_access_type = "private"
 }
