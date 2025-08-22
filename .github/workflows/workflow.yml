@@ -56,8 +56,6 @@ jobs:
           id: tfapply-bootstrap
           working-directory: terraform/bootstrap_storage
           env:
-            TF_VAR_tenant_id: ${{ env.ARM_TENANT_ID }}
-            TF_VAR_central_subscription_id: ${{ env.ARM_SUBSCRIPTION_ID }}
             TF_VAR_tenant_name: ${{ matrix.env }}
             TF_VAR_location: ${{ env.LOCATION }}
           run: terraform apply -auto-approve -input=false
@@ -73,7 +71,7 @@ jobs:
         
         - name: Migrate local state to Azure Backend
           id: tfmigrate
-          working-directory: terraform/diagnostic_settings
+          working-directory: terraform/bootstrap_storage
           env:
             SA_NAME: ${{ steps.tfout.outputs.sa_name }}
             SA_RG: ${{ steps.tfout.outputs.sa_rg }}
