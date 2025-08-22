@@ -1,6 +1,6 @@
 # Project-Unicorn
 
-The pipelines are designed to run per Azure tenant. <br>
+The pipelines are designed to run in 2 Azure tenant. <br>
 For that, I have configured 2 GitHub Environments [tenant-A, tenant-B] that map to each Azure tenant.<br>
 Each environment contains service principal details stored securely as GitHub Secrets. The details are used to authenticate the pipeline to Azure by impersonating a service principal in that tenant.
 The service principal uses Entra ID configured Federated credentials and authorizes the workflow to use OIDC tokens:
