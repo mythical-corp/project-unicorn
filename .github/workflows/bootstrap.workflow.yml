@@ -95,5 +95,9 @@ jobs:
             gh secret set STORAGE_RG --env ${{ matrix.env }} --body "${{ steps.tfouts.outputs.sa_rg }}"
             gh secret set STORAGE_CONTAINER -env ${{ matrix.env }} --body "${{ steps.tfouts.outputs.sa_container }}"
             gh secret set STATE_FILE -env ${{ matrix.env }} --body "${{ matrix.env }}.tfstate"
+                
+            
+        - name: Done
+          run: echo "Bootstrap complete for ${{ matrix.env }} (tenant ${TENANT_NAME})"
 
        
