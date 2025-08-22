@@ -70,7 +70,7 @@ jobs:
         
         - name: Terraform state sync to Azure Backend
           id: tfinit
-          working-directory: terraform/bootstrap_storage
+          working-directory: terraform/diagnostic_settings
           run: |
             terraform init \
               -migrate-state \
